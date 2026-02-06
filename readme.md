@@ -1,33 +1,34 @@
-# BBS 1 Mainz BSFI24D Projekt
+# Dokumentation: Raspberry Pi Simon Says
 
-## Simon Says Raspi Edition
-Wir haben uns dazu entschieden ein Spiel zu programmieren was Simon Says nachempfunden ist. Das Programm ist simpel mit Python programmiert. Die Knöpfe und die LED's werden in der `config.py` Konfiguriert.
+## 1. Projektübersicht
+Dieses Projekt realisiert das klassische "Simon Says" Gedächtnisspiel. Ein Raspberry Pi 4B steuert vier LEDs und registriert Eingaben über vier Taster. Ziel ist es, eine zufällig generierte und immer länger werdende Sequenz von Lichtsignalen fehlerfrei zu wiederholen. Ein aktiver Buzzer gibt akustisches Feedback zum Spielstatus.
 
-### Installation
+## 2. Hardware-Komponenten
 
-```bash
-git clone https://github.com/kruemmel2704/SimonSays1.git
-cd SimonSays
-```
+- Zentraleinheit: Raspberry Pi 4 Model B 
+- Eingabe: 4x Push-Button (Taster).
+- Ausgabe (Optisch): 4x LED (Rot, Grün, Blau, Gelb).
+- Ausgabe (Akustisch): 1x Aktiver Buzzer (Pieper).
+- Widerstände: 4x 220 $\Omega$ (für LEDs).
+- Verkabelung: Jumper-Kabel und Breadboard.
 
-#### Programm automatisiert starten
-Damit das Programm im Hintergrund läuft muss `screen` installiert sein.
+## 3. Anschlussplan (GPIO Belegung)
 
-```bash
-sudo apt update && sudo apt install screen -y
-```
+Die Software nutzt die BCM-Nummerierung. Die Taster sind gegen GND geschaltet (interner Pull-Up aktiviert).
 
-danach mit `cronjob` bei neustart das Programm ausführen lassen
 
-```bash
-@reboot -dmS SimonSays python /dein/pfad/SimonSays.py
-```
-
-dann einmal mit `sudo reboot` neustarten
-
-### Aufbau
-
-Die von Ihnen gewählten Pins in der `config.py` werden mit 3,3V versorgt. Die anderen Pins der LED's und der Knöpfe müssen dann an einer der Massen angeschlossen werden.
+| Farbe / Typ | Komponente | BCM Pin | Physischer Pin |
+| --- | --- | --- | --- |
+| Rot | LED | 17 | Pin 11 |
+| Rot | Button | 18 | Pin 12 |
+| Grün | LED | 27 | Pin 13 |
+| Grün | Button | 22 | Pin 15 |
+| Blau | LED | 23 | Pin 16 |
+| Blau | Button | 24 | Pin 18 |
+| Gelb | LED | 25 | Pin 22 |
+| Gelb | Button | 5 | Pin 29 |
+| Sound | Buzzer | 6 | Pin 31 |
+| Masse | Common GND | - | "z.B. Pin 6, 9, 14" |
 
 ```plaintext
           (SD-Karten-Slot Seite)
@@ -54,24 +55,50 @@ Die von Ihnen gewählten Pins in der `config.py` werden mit 3,3V versorgt. Die a
           (USB/Ethernet Seite)
 ```
 
-### Konfiguration
 
-Die Konfiguration wird in der `config.py` vorgenommen
+## 4. Software-Architektur
+### Dateistruktur
 
-```ini, toml
-HARDWARE_SETUP = {
-    "red": {"led": PIN_ROTE_LED, "btn": PIN_KNOPF_ROTE_LED},
-    "green": {"led": PIN_GRÜNE_LED, "btn": PIN_KNOPF_GRÜNE_LED},
-    "blue": {"led": PIN_BLAUE_LED, "btn": PIN_KNOPF_BLAUE_LED},
-    "yellow": {"led": PIN_GELBE_LED, "btn": PIN_KNOPF_GELBE_LED}
-}
+`Config.py`: Enthält die Pin-Konfiguration und Hardware-Zuweisung.
+
+`SimonSay.py`: Beinhaltet die gesamte Spiellogik, Klassenstruktur und Hardware-Interaktion via gpiozero.
+
+`Dockerfile` / `docker-compose.yml`: Ermöglicht den Betrieb in einer isolierten Container-Umgebung auf Debian-Basis.
+
+### Spiel-Ablauf & Signale
+****Bereitschaft (Idle)****: Eine "Wellen-Animation" läuft dauerhaft über die LEDs, bis ein beliebiger Knopf gedrückt wird.
+
+****Simon-Phase****: Simon fügt der Sequenz eine neue Farbe hinzu und spielt diese ab. Der Buzzer piept 1x zur Einleitung.
+
+****Spieler-Phase****: Der Buzzer piept 2x schnell. Der Spieler muss die Sequenz wiederholen.
+
+****Game Over****: Bei falscher Eingabe blinken alle LEDs und der Buzzer piept 3x langsam. Danach kehrt das Programm zur Bereitschafts-Welle zurück.
+
+
+
+
+## 5. Deployment via Docker
+
+Das Projekt ist für den Betrieb unter ****Debian 13 (Trixie)**** mit ****Kernel 6.12**** optimiert.
+
+#### Voraussetzungen
+
+- Docker & Docker Compose installiert.
+
+- lgpio Bibliothek im Container für modernen Kernel-Zugriff.
+
+```bash
+# Bauen und Starten im Hintergrund
+docker compose up -d --build
+
+# Logs einsehen (um Spielanweisungen zu lesen)
+docker compose logs -f
 ```
 
-Bitte passen Sie die Pins der Jeweiligen LED's und Knöpfe an
+## 6. Sicherheitshinweise
 
-### Das Programm
+- ****Widerstände****: Betreibe LEDs niemals ohne Vorwiderstand am Pi 4B, um die GPIO-Ports zu schützen.
 
-Wenn das Programm ausgeführt wird, leuchten alle LED's in einer Wellenform auf. Drücken Sie hier einen Knopf um das Spiel zu beginnen. Der Computer gibt Ihnen eine Reihenfolge vor, diese müssen Sie sich merken und dann über die Knöpfe wiedergeben. Falls Sie einen Fehler machen haben Sie verloren. Alle LED's blinken gleichzeitig und Sie gelangen wieder zum Start.
+- ****GND****: Achte darauf, dass alle Buttons und LED-Kathoden eine saubere Verbindung zur gemeinsamen Masse (GND) haben.
 
-![Spielablauf](/video/game.webm)
-
+- ****Case Sensitivity****: Unter Linux muss die Konfigurationsdatei strikt kleingeschrieben als config.py vorliegen, damit der Import im Docker-Container funktioniert.
